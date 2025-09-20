@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CONQUEST</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=IM+Fell+English+SC&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'IM Fell English SC', serif;
+            background-color: #000000; 
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            image-rendering: pixelated;
+        }
+        .font-cinzel { font-family: 'Cinzel', serif; }
+        .font-pixel { font-family: 'Press Start 2P', cursive; }
+
+        #main-menu {
+            background-image: url('https://i.ibb.co/d0tHG9GZ/game-title-screen.png');
+            background-size: cover;
+            background-position: center;
+        }
+
+        #game-container {
+            flex: 1; 
+            position: relative; 
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            transition: background-image 1s ease-in-out;
+        }
+        
+        .path-marker {
+            position: absolute;
+            width: 4vw; height: 4vw;
+            max-width: 40px; max-height: 40px;
+            background-color: rgba(240, 230, 210, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            backdrop-filter: blur(1.5px);
+        }
+        .path-marker.challenge { border-color: rgba(231, 111, 81, 0.6); }
+        .path-marker.finish { border-color: rgba(241, 196, 15, 0.8); background-color: rgba(241, 196, 15, 0.25); }
+
+        #player-pawn {
+            position: absolute;
+            z-index: 10;
+            width: 64px; height: 64px;
+            background-repeat: no-repeat;
+            transform: scale(1.9) translate(-50%, -75%);
+            transition: top 0.3s ease-in-out, left 0.3s ease-in-out;
+            pointer-events: none;
+        }
+        #player-pawn.idle {
+            background-image: url('https://i.ibb.co/m5xdt6TX/Idle.png');
+            animation: play-idle 1s steps(6) infinite;
+        }
+        #player-pawn.running {
+            background-image: url('https://i.ibb.co/PG9ngtgp/Run.png');
+            animation: play-run 0.8s steps(8) infinite;
+        }
+        @keyframes play-idle { from { background-position: 0px; } to { background-position: -384px; } }
+        @keyframes play-run { from { background-position: 0px; } to { background-position: -512px; } }
+        
+        #ui-panel {
+            backdrop-filter: blur(5px);
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+            z-index: 20;
+            transition: background-color 1s ease, border-color 1s ease;
+        }
+        
+        .dice-display {
+            width: 60px; height: 60px;
+            background-color: rgba(10, 10, 10, 0.7);
+            border-radius: 0.5rem; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: #d1d5db;
+            border: 2px solid rgba(107, 114, 128, 0.7);
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+        }
+        .dice-display.rolling { animation: roll-animation 0.5s infinite; }
+        @keyframes roll-animation {
+            0% { transform: rotateY(0deg) rotateX(0deg); }
+            100% { transform: rotateY(360deg) rotateX(180deg); }
+        }
+        #task-modal {
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+        }
+        #task-modal-content {
+            font-family: 'Press Start 2P', cursive;
+        }
+        #gameCanvas {
+            background-color: #1a252f;
+            border: 2px solid #bdc3c7;
+            cursor: crosshair;
+        }
+        .prediction-input {
+            width: 80px; text-align: center;
+        }
+        #toast {
+            transition: opacity 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="text-white">
+
+    <div id="main-menu" class="h-full w-full flex flex-col items-center justify-center p-8 bg-black/50">
+        <h1 class="font-cinzel text-8xl text-white" style="text-shadow: 2px 2px 0 #000, 0 0 25px #eab308, 0 0 5px #eab308;">CONQUEST</h1>
+        <h2 class="text-2xl text-white/90" style="text-shadow: 1px 1px 2px #000;">An Adventure Mini-Game</h2>
+        <h3 class="text-xl text-amber-200/80 mb-12" style="text-shadow: 1px 1px 2px #000;">By Caffeine Crew</h3>
+        <button id="play-game-btn" class="w-80 bg-amber-600 hover:bg-amber-700 text-white text-3xl font-bold py-4 px-8 rounded-lg transition-colors font-cinzel tracking-wider">
+            Play Game
+        </button>
+    </div>
+
+    <div id="game-wrapper" class="hidden h-full w-full flex-col">
+        <div id="game-container">
+            <div id="player-pawn"></div>
+        </div>
+        <div id="ui-panel" class="p-4">
+            <div class="max-w-4xl mx-auto flex items-center justify-between gap-4">
+                <div id="game-log" class="flex-1 bg-black/30 p-3 rounded-lg h-24 text-center text-sm flex items-center justify-center text-gray-300"></div>
+                <div class="flex items-center gap-4">
+                     <div class="flex flex-col items-center">
+                        <p class="text-xs font-bold text-gray-300 font-cinzel">Move</p>
+                        <div id="movement-dice-display" class="dice-display mt-1 text-2xl font-pixel">?</div>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <p class="text-xs font-bold text-gray-300 font-cinzel">Task</p>
+                        <div id="task-dice-display" class="dice-display mt-1 text-xs font-pixel">?</div>
+                    </div>
+                </div>
+                <div id="button-container" class="flex flex-col gap-2 w-48">
+                    <button id="roll-button" class="w-full bg-amber-600 hover:bg-amber-700 text-white text-xl font-bold py-2 rounded-lg transition-colors h-16 font-cinzel tracking-wider">ROLL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="task-modal" class="fixed inset-0 flex items-center justify-center p-4 hidden z-50">
+        <div id="task-modal-content" class="bg-[#1e1914] border-2 border-[#5a4632] p-6 rounded-2xl shadow-2xl max-w-4xl w-full">
+            <h3 id="task-difficulty" class="text-center text-3xl font-bold mb-4 text-yellow-300"></h3>
+            <div id="minigame-container" class="w-full flex justify-center items-center h-auto mb-6 bg-gray-700 rounded-lg flex-col p-4">
+                </div>
+            <div id="modal-button-container">
+                 <button id="complete-task-btn" class="w-full py-3 bg-green-500 text-lg font-bold rounded-full text-gray-900 transition-colors hover:bg-green-400">Complete Task</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-28 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-lg opacity-0 pointer-events-none font-pixel text-sm"></div>
+
+    <script>
+        // --- GLOBAL ELEMENTS & STATE ---
+        const mainMenu = document.getElementById('main-menu');
+        const playGameBtn = document.getElementById('play-game-btn');
+        const gameWrapper = document.getElementById('game-wrapper');
+        const gameContainer = document.getElementById('game-container');
+        const uiPanel = document.getElementById('ui-panel');
+        const pawnEl = document.getElementById('player-pawn');
+        const rollButton = document.getElementById('roll-button');
+        const gameLog = document.getElementById('game-log');
+        const movementDiceDisplay = document.getElementById('movement-dice-display');
+        const taskDiceDisplay = document.getElementById('task-dice-display');
+        const taskModal = document.getElementById('task-modal');
+        const taskDifficultyEl = document.getElementById('task-difficulty');
+        const minigameContainer = document.getElementById('minigame-container');
+        const modalButtonContainer = document.getElementById('modal-button-container');
+        
+        let playerPositionIndex = 0;
+        let isPlayerTurn = true;
+        let currentLevelIndex = 0;
+        let currentTaskAction = '';
+        let gameAnimationFrameId = null;
+        let gameTimerInterval = null;
+        
+        // --- GAME DATA ---
+        const levels = [
+            { name: "The Enchanted Forest", backgroundImage: 'https://i.ibb.co/sp7JfwDy/game-background.png', uiColor: '#5a4632', bgColor: 'rgba(30, 25, 20, 0.9)', pathCoordinates: [ { "x": 14.33, "y": 77.53, "type": "start" }, { "x": 18.06, "y": 70.47, "type": "empty" }, { "x": 19.57, "y": 58.97, "type": "challenge" }, { "x": 15.97, "y": 50.92, "type": "empty" }, { "x": 11.58, "y": 44.35, "type": "empty" }, { "x": 9.88, "y": 32.85, "type": "challenge" }, { "x": 13.68, "y": 21.02, "type": "empty" }, { "x": 20.42, "y": 11.99, "type": "empty" }, { "x": 29.06, "y": 5.42, "type": "challenge" }, { "x": 36.52, "y": 2.46, "type": "empty" }, { "x": 43.06, "y": 5.75, "type": "empty" }, { "x": 38.94, "y": 18.73, "type": "challenge" }, { "x": 37.17, "y": 32.03, "type": "empty" }, { "x": 39.27, "y": 45.83, "type": "empty" }, { "x": 39.2, "y": 61.93, "type": "challenge" }, { "x": 43.06, "y": 76.54, "type": "empty" }, { "x": 52.09, "y": 72.77, "type": "empty" }, { "x": 57.53, "y": 58.15, "type": "empty" }, { "x": 52.68, "y": 33.84, "type": "empty" }, { "x": 57.59, "y": 20.7, "type": "empty" }, { "x": 67.6, "y": 16.1, "type": "empty" }, { "x": 67.93, "y": 40.24, "type": "empty" }, { "x": 77.49, "y": 54.04, "type": "empty" }, { "x": 88.81, "y": 58.48, "type": "empty" }, { "x": 98.89, "y": 53.88, "type": "finish" } ] },
+            { name: "Canyon of Trials", backgroundImage: 'https://i.ibb.co/99SqfPQB/game-lvl2.png', uiColor: '#5a4632', bgColor: 'rgba(30, 25, 20, 0.9)', pathCoordinates: [ { "x": 64.59, "y": 99.21, "type": "start" }, { "x": 60.73, "y": 94.94, "type": "empty" }, { "x": 56.54, "y": 89.68, "type": "challenge" }, { "x": 51.37, "y": 83.94, "type": "empty" }, { "x": 46.01, "y": 87.39, "type": "empty" }, { "x": 41.3, "y": 92.97, "type": "challenge" }, { "x": 37.43, "y": 98.23, "type": "empty" }, { "x": 32, "y": 94.61, "type": "empty" }, { "x": 29.12, "y": 87.55, "type": "challenge" }, { "x": 26.83, "y": 79.17, "type": "empty" }, { "x": 31.09, "y": 75.23, "type": "empty" }, { "x": 35.6, "y": 69.97, "type": "challenge" }, { "x": 40.31, "y": 64.72, "type": "empty" }, { "x": 45.68, "y": 66.36, "type": "empty" }, { "x": 51.05, "y": 65.05, "type": "challenge" }, { "x": 56.02, "y": 57.82, "type": "empty" }, { "x": 59.95, "y": 50.59, "type": "empty" }, { "x": 63.29, "y": 45.17, "type": "challenge" }, { "x": 67.34, "y": 37.78, "type": "empty" }, { "x": 71.2, "y": 32.03, "type": "empty" }, { "x": 74.8, "y": 26.77, "type": "challenge" }, { "x": 78.53, "y": 21.35, "type": "empty" }, { "x": 81.94, "y": 15.28, "type": "empty" }, { "x": 85.54, "y": 9.86, "type": "challenge" }, { "x": 89.2, "y": 4.27, "type": "finish" } ] },
+            { name: "Volcanic Vista", backgroundImage: 'https://i.ibb.co/gLmZrJ7n/level3.png', uiColor: '#8c2f39', bgColor: 'rgba(40, 25, 25, 0.9)', pathCoordinates: [ { "x": 60.6, "y": 98.39, "type": "start" }, { "x": 56.28, "y": 94.12, "type": "empty" }, { "x": 51.57, "y": 87.88, "type": "challenge" }, { "x": 48.1, "y": 83.61, "type": "empty" }, { "x": 44.96, "y": 77.04, "type": "empty" }, { "x": 42.41, "y": 70.96, "type": "challenge" }, { "x": 38.61, "y": 75.39, "type": "empty" }, { "x": 34.82, "y": 81.14, "type": "empty" }, { "x": 29.38, "y": 76.87, "type": "challenge" }, { "x": 26.24, "y": 70.3, "type": "empty" }, { "x": 25.33, "y": 59.46, "type": "empty" }, { "x": 28.14, "y": 50.26, "type": "challenge" }, { "x": 30.69, "y": 43.53, "type": "empty" }, { "x": 35.14, "y": 43.2, "type": "empty" }, { "x": 38.87, "y": 47.63, "type": "challenge" }, { "x": 43.19, "y": 53.38, "type": "empty" }, { "x": 46.92, "y": 59.13, "type": "empty" }, { "x": 50.79, "y": 65.05, "type": "empty" }, { "x": 55.37, "y": 70.8, "type": "empty" }, { "x": 59.42, "y": 75.89, "type": "empty" }, { "x": 63.29, "y": 81.64, "type": "empty" }, { "x": 68, "y": 84.43, "type": "empty" }, { "x": 72.25, "y": 89.52, "type": "empty" }, { "x": 75.98, "y": 93.96, "type": "empty" }, { "x": 80.43, "y": 96.25, "type": "finish" } ] },
+            { name: "The Mystic Marsh", backgroundImage: 'https://i.ibb.co/RGwtKGQ7/lvl4.png', uiColor: '#134e4a', bgColor: 'rgba(20, 40, 35, 0.9)', pathCoordinates: [ { "x": 50.26, "y": 99.44, "type": "start" }, { "x": 53.27, "y": 94.69, "type": "empty" }, { "x": 56.28, "y": 90.76, "type": "challenge" }, { "x": 59.82, "y": 88.79, "type": "empty" }, { "x": 63.09, "y": 93.87, "type": "empty" }, { "x": 66.23, "y": 90.76, "type": "challenge" }, { "x": 69.57, "y": 87.32, "type": "empty" }, { "x": 72.58, "y": 82.08, "type": "empty" }, { "x": 75.59, "y": 77, "type": "challenge" }, { "x": 79.12, "y": 72.41, "type": "empty" }, { "x": 75.98, "y": 67.82, "type": "empty" }, { "x": 73.23, "y": 62.58, "type": "challenge" }, { "x": 69.44, "y": 61.27, "type": "empty" }, { "x": 66.23, "y": 57.83, "type": "empty" }, { "x": 63.15, "y": 53.41, "type": "challenge" }, { "x": 60.21, "y": 48.98, "type": "empty" }, { "x": 57.66, "y": 44.23, "type": "empty" }, { "x": 54.52, "y": 41.61, "type": "challenge" }, { "x": 50.65, "y": 37.84, "type": "empty" }, { "x": 47.38, "y": 33.09, "type": "empty" }, { "x": 43.98, "y": 28.34, "type": "challenge" }, { "x": 40.71, "y": 23.26, "type": "empty" }, { "x": 42.02, "y": 14.25, "type": "empty" }, { "x": 44.83, "y": 9.01, "type": "challenge" }, { "x": 47.97, "y": 3.6, "type": "finish" } ] }
+        ];
+        const games = {
+            easy: [ showEasyGame1, showEasyGame2 ],
+            medium: [ showMediumGame1, showMediumGame2 ],
+            hard: [ showHardGame1, showHardGame2 ]
+        };
+        const diceMap = ['EASY', 'MEDIUM', 'HARD', 'SAFE'];
+
+        // --- CORE GAME FLOW & LOGIC ---
+        
+        function endTurn(message, penalty = 0) {
+            if (penalty > 0) {
+                movePlayerBackward(penalty, () => {
+                    showToast(`Task failed. Moved back ${penalty} spaces.`);
+                    gameLog.textContent = `Task failed! Moved back ${penalty} space${penalty > 1 ? 's' : ''}. Roll again.`;
+                    isPlayerTurn = true;
+                    rollButton.disabled = false;
+                    rollButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                });
+            } else {
+                showToast(message);
+                gameLog.textContent = message;
+                isPlayerTurn = true;
+                rollButton.disabled = false;
+                rollButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+            pawnEl.classList.remove('running');
+            pawnEl.classList.add('idle');
+        }
+
+        function rollDice() {
+            if (!isPlayerTurn) return;
+            isPlayerTurn = false;
+            rollButton.disabled = true;
+            rollButton.classList.add('opacity-50', 'cursor-not-allowed');
+            gameLog.textContent = "The dice are tumbling...";
+
+            movementDiceDisplay.classList.add('rolling');
+            taskDiceDisplay.classList.add('rolling');
+            
+            let rollCount = 0;
+            const interval = setInterval(() => {
+                movementDiceDisplay.textContent = Math.floor(Math.random() * 6) + 1;
+                taskDiceDisplay.textContent = diceMap[Math.floor(Math.random() * diceMap.length)];
+                rollCount++;
+                if (rollCount > 15) {
+                    clearInterval(interval);
+                    movementDiceDisplay.classList.remove('rolling');
+                    taskDiceDisplay.classList.remove('rolling');
+                    
+                    const movementRoll = Math.floor(Math.random() * 6) + 1;
+                    const taskRoll = diceMap[Math.floor(Math.random() * diceMap.length)];
+                    
+                    movementDiceDisplay.textContent = movementRoll;
+                    taskDiceDisplay.textContent = taskRoll;
+                    
+                    setTimeout(() => {
+                        gameLog.textContent = `You rolled a ${movementRoll} for a ${taskRoll} task! Moving...`;
+                        movePlayer(movementRoll, taskRoll);
+                    }, 500);
+                }
+            }, 50);
+        }
+        
+        function movePlayer(steps, taskType) {
+            pawnEl.classList.replace('idle', 'running');
+            let currentStep = 0;
+            const moveInterval = setInterval(() => {
+                if (currentStep >= steps || playerPositionIndex >= levels[currentLevelIndex].pathCoordinates.length - 1) {
+                    if (currentStep < steps && playerPositionIndex < levels[currentLevelIndex].pathCoordinates.length - 1) {
+                         playerPositionIndex = Math.min(playerPositionIndex + (steps - currentStep), levels[currentLevelIndex].pathCoordinates.length - 1);
+                         updatePawnPosition();
+                    }
+                    clearInterval(moveInterval);
+                    checkCurrentTile(taskType);
+                    return;
+                }
+                playerPositionIndex++;
+                updatePawnPosition();
+                currentStep++;
+            }, 350);
+        }
+
+        function movePlayerBackward(steps, callback) {
+            pawnEl.classList.replace('idle', 'running');
+            const newPosition = Math.max(0, playerPositionIndex - steps);
+            const moveInterval = setInterval(() => {
+                if (playerPositionIndex <= newPosition) {
+                    clearInterval(moveInterval);
+                    pawnEl.classList.replace('running', 'idle');
+                    if (callback) callback();
+                    return;
+                }
+                playerPositionIndex--;
+                updatePawnPosition();
+            }, 300);
+        }
+
+        function checkCurrentTile(taskType) {
+            const currentTile = levels[currentLevelIndex].pathCoordinates[playerPositionIndex];
+            
+            if (currentTile.type === 'finish') {
+                handleLevelComplete();
+                return;
+            }
+
+            if (taskType === 'SAFE') {
+                endTurn("Landed safely! Your turn continues.");
+            } else {
+                gameLog.textContent = `You landed and must face a ${taskType} task!`;
+                showTask(taskType);
+            }
+        }
+
+        function handleTaskCompletion() {
+            taskModal.classList.add('hidden');
+            if (currentTaskAction === 'SUCCESS') {
+                const currentTile = levels[currentLevelIndex].pathCoordinates[playerPositionIndex];
+                 if (currentTile.type === 'finish') {
+                    handleLevelComplete();
+                } else {
+                    endTurn('Task Completed! Roll again.');
+                }
+            } else if (currentTaskAction === 'FAILURE_2') {
+                endTurn(null, 2);
+            }
+            currentTaskAction = '';
+        }
+
+        function handleLevelComplete() {
+            pawnEl.classList.replace('running', 'idle');
+            if (currentLevelIndex < levels.length - 1) {
+                taskDifficultyEl.textContent = "Level Complete!";
+                minigameContainer.innerHTML = `<p class="text-lg text-gray-200 text-center">You've found the way to the next area!</p>`;
+                modalButtonContainer.innerHTML = `<button id="next-level-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-lg font-bold rounded-full text-white">Next Level</button>`;
+                taskModal.classList.remove('hidden');
+                
+                document.getElementById('next-level-btn').addEventListener('click', () => {
+                    taskModal.classList.add('hidden');
+                    loadLevel(currentLevelIndex + 1);
+                }, { once: true });
+
+            } else {
+                handleGameVictory();
+            }
+        }
+
+        function handleGameVictory() {
+            taskDifficultyEl.textContent = "Rocky Bhai wins";
+            minigameContainer.innerHTML = `<p class="text-2xl text-amber-300 text-center">Kalashnikov</p>`;
+            modalButtonContainer.innerHTML = `<button onclick="location.reload()" class="w-full py-3 bg-amber-600 hover:bg-amber-700 text-lg font-bold rounded-full text-white">Play Again</button>`;
+            taskModal.classList.remove('hidden');
+        }
+
+        // --- SETUP & UTILS ---
+        function loadLevel(index) {
+            isPlayerTurn = true;
+            rollButton.disabled = false;
+            rollButton.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            mainMenu.classList.add('hidden');
+            gameWrapper.classList.remove('hidden');
+            gameWrapper.classList.add('flex');
+            currentLevelIndex = index;
+            const levelData = levels[currentLevelIndex];
+            gameContainer.style.backgroundImage = `url('${levelData.backgroundImage}')`;
+            uiPanel.style.backgroundColor = levelData.bgColor;
+            uiPanel.style.borderColor = levelData.uiColor;
+            playerPositionIndex = 0;
+            createPath();
+            updatePawnPosition();
+            gameLog.textContent = `Welcome to ${levelData.name}! Roll the dice to begin.`;
+            
+            if (index === 2) {
+                showToast("Welcome to Kurukkanmoola");
+            }
+        }
+
+        function createPath() {
+            document.querySelectorAll('.path-marker').forEach(marker => marker.remove());
+            levels[currentLevelIndex].pathCoordinates.forEach((coord, index) => {
+                const marker = document.createElement('div');
+                marker.classList.add('path-marker');
+                marker.style.left = `${coord.x}%`;
+                marker.style.top = `${coord.y}%`;
+                if (coord.type === 'challenge' || coord.type === 'finish') {
+                    marker.classList.add(coord.type);
+                }
+                gameContainer.insertBefore(marker, pawnEl);
+            });
+        }
+        
+        function updatePawnPosition() {
+            const currentCoord = levels[currentLevelIndex].pathCoordinates[playerPositionIndex];
+            pawnEl.style.left = `${currentCoord.x}%`;
+            pawnEl.style.top = `${currentCoord.y}%`;
+        }
+        
+        function showToast(message) {
+            toast.textContent = message;
+            toast.classList.remove('opacity-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+            }, 3000);
+        }
+
+        function clearMinigame() {
+            if (gameAnimationFrameId) {
+                cancelAnimationFrame(gameAnimationFrameId);
+                gameAnimationFrameId = null;
+            }
+            if(gameTimerInterval) {
+                clearInterval(gameTimerInterval);
+                gameTimerInterval = null;
+            }
+            modalButtonContainer.innerHTML = `<button id="complete-task-btn" class="w-full py-3 bg-green-500 text-lg font-bold rounded-full text-gray-900 transition-colors hover:bg-green-400">Complete Task</button>`;
+            document.getElementById('complete-task-btn').addEventListener('click', handleTaskCompletion);
+            minigameContainer.innerHTML = '';
+        }
+
+        // --- MINIGAME LOGIC (WITH PERFORMANCE OPTIMIZATIONS) ---
+        function showTask(difficulty) {
+            clearMinigame();
+            taskDifficultyEl.textContent = `${difficulty} Task`;
+            const gamesList = games[difficulty.toLowerCase()];
+            if (gamesList?.length > 0) {
+                const selectedGame = gamesList[Math.floor(Math.random() * gamesList.length)];
+                selectedGame();
+            }
+            taskModal.classList.remove('hidden');
+        }
+
+        function showEasyGame1() { /* Memory Game */
+            const completeBtn = document.getElementById('complete-task-btn');
+            if(completeBtn) completeBtn.style.display = 'none';
+            let digits = Array.from({length: 3}, () => Math.floor(Math.random() * 10));
+            const correctSequence = digits.join('');
+            minigameContainer.innerHTML = `<div class="flex flex-col items-center justify-center space-y-4 h-48"><p class="text-xl text-center">Memorize the sequence!</p><p class="text-6xl font-bold text-yellow-300 tracking-widest">${digits.join(' ')}</p></div>`;
+            setTimeout(() => {
+                minigameContainer.innerHTML = `<div class="flex flex-col items-center justify-center space-y-4 h-48"><p class="text-lg text-center">Enter the sequence:</p><input type="text" id="guess-input" placeholder="e.g., 123" class="prediction-input p-2 text-2xl bg-gray-800 text-yellow-300 rounded-lg" maxlength="3" autofocus><button id="submit-guess-btn" class="px-6 py-3 bg-blue-500 rounded-full mt-2">Submit</button><p id="guess-feedback" class="h-6 mt-2"></p></div>`;
+                const guessInput = document.getElementById('guess-input'), submitBtn = document.getElementById('submit-guess-btn'), feedbackEl = document.getElementById('guess-feedback');
+                const checkGuess = () => {
+                    if (submitBtn.disabled) return; submitBtn.disabled = true;
+                    if (guessInput.value === correctSequence) {
+                        feedbackEl.textContent = `Correct!`; currentTaskAction = 'SUCCESS'; completeBtn.textContent = 'Task Complete!';
+                    } else {
+                        feedbackEl.textContent = `Failed! The sequence was ${correctSequence}.`; currentTaskAction = 'FAILURE_2'; completeBtn.textContent = 'Continue';
+                    }
+                    if(completeBtn) completeBtn.style.display = 'block';
+                };
+                submitBtn.onclick = checkGuess; guessInput.onkeydown = (e) => { if (e.key === 'Enter') checkGuess(); };
+            }, 1500);
+        }
+        function showEasyGame2() { /* Jumper Game */
+            clearMinigame();
+            const completeBtn = document.getElementById('complete-task-btn');
+            if(completeBtn) completeBtn.style.display = 'none';
+            minigameContainer.innerHTML = `<div class="flex flex-col items-center justify-center space-y-2 w-full text-sm"><p class="text-center">Survive for 20 seconds! Use Spacebar to jump.</p><p>Time: <span id="time" class="text-yellow-300">20.0</span>s</p><canvas id="gameCanvas" width="500" height="250"></canvas><p id="feedback" class="text-lg h-6"></p></div>`;
+            const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d'), timerDisplay = document.getElementById('time'), feedback = document.getElementById('feedback');
+            const groundY = 180, gravity = 0.5, jumpForce = -10, speed = 4, gameDuration = 20000;
+            let bike = { x: 50, y: groundY, width: 40, height: 25, vy: 0, isJumping: false };
+            let obstacles = [], gameActive = true, lastObstacleTime = 0, startTime = Date.now();
+            const handleKeyDown = (e) => { if (e.code === 'Space' && !bike.isJumping) { bike.vy = jumpForce; bike.isJumping = true; } };
+            const endGame = (didWin) => {
+                gameActive = false; document.removeEventListener('keydown', handleKeyDown);
+                feedback.textContent = didWin ? "You survived!" : "Crashed!";
+                currentTaskAction = didWin ? 'SUCCESS' : 'FAILURE_2';
+                completeBtn.textContent = didWin ? 'Task Complete!' : 'Continue';
+                if(completeBtn) completeBtn.style.display = 'block';
+            };
+            // OPTIMIZATION: Update timer with setInterval to reduce DOM updates
+            gameTimerInterval = setInterval(() => {
+                if (!gameActive) { clearInterval(gameTimerInterval); return; }
+                const elapsed = Date.now() - startTime;
+                if (elapsed >= gameDuration) { clearInterval(gameTimerInterval); return; }
+                timerDisplay.textContent = ((gameDuration - elapsed) / 1000).toFixed(1);
+            }, 100);
+            function gameLoop() {
+                if (!gameActive) return;
+                const elapsed = Date.now() - startTime;
+                if (elapsed >= gameDuration) return endGame(true);
+                bike.y += bike.vy; bike.vy += gravity;
+                if (bike.y >= groundY) { bike.y = groundY; bike.vy = 0; bike.isJumping = false; }
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#34D399'; ctx.fillRect(0, groundY + bike.height, canvas.width, canvas.height);
+                ctx.save(); ctx.translate(bike.x, bike.y); ctx.fillStyle = '#FBBF24'; ctx.beginPath(); ctx.moveTo(0, bike.height); ctx.lineTo(bike.width, bike.height); ctx.lineTo(bike.width - 10, bike.height - 15); ctx.lineTo(10, bike.height - 15); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.arc(15, bike.height, 8, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(bike.width - 15, bike.height, 8, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+                if (Date.now() - lastObstacleTime > Math.random() * 1000 + 1000) { const h = Math.random() * 30 + 15; obstacles.push({ x: canvas.width, y: groundY + bike.height - h, width: 15, height: h }); lastObstacleTime = Date.now(); }
+                obstacles.forEach((obs, i) => {
+                    obs.x -= speed;
+                    if (bike.x < obs.x + obs.width && bike.x + bike.width > obs.x && bike.y < obs.y + obs.height && bike.y + bike.height > obs.y) endGame(false);
+                    if (obs.x + obs.width < 0) obstacles.splice(i, 1);
+                    ctx.fillStyle = '#DC2626'; ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                });
+                gameAnimationFrameId = requestAnimationFrame(gameLoop);
+            }
+            document.addEventListener('keydown', handleKeyDown); gameLoop();
+        }
+        function showMediumGame1() { /* Predict Roll */
+            clearMinigame();
+            const completeBtn = document.getElementById('complete-task-btn');
+            if(completeBtn) completeBtn.style.display = 'none';
+            minigameContainer.innerHTML = `<div class="flex flex-col items-center justify-center space-y-4"><p class="text-lg text-center">Predict the next dice roll (1-6):</p><input type="number" id="prediction-input" min="1" max="6" class="prediction-input p-2 bg-gray-800 text-yellow-300 rounded-lg"><button id="predict-btn" class="px-6 py-3 bg-blue-500 rounded-full mt-2">Predict</button></div>`;
+            document.getElementById('predict-btn').onclick = () => {
+                const prediction = parseInt(document.getElementById('prediction-input').value);
+                if (!prediction || prediction < 1 || prediction > 6) return;
+                const actualRoll = Math.floor(Math.random() * 6) + 1;
+                const didWin = prediction === actualRoll;
+                minigameContainer.innerHTML = `<p class="text-xl text-center">The roll was ${actualRoll}. You were ${didWin ? "Correct!" : "Incorrect!"}</p>`;
+                currentTaskAction = didWin ? 'SUCCESS' : 'FAILURE_2';
+                completeBtn.textContent = didWin ? 'Task Complete!' : 'Continue';
+                if(completeBtn) completeBtn.style.display = 'block';
+            };
+        }
+        function showMediumGame2() { /* Gold Catcher Game */
+            clearMinigame();
+            const completeBtn = document.getElementById('complete-task-btn');
+            if(completeBtn) completeBtn.style.display = 'none';
+            minigameContainer.innerHTML = `<div class="flex flex-col items-center justify-center space-y-2 text-sm"><p>Catch 100 points! Arrow Keys to move heli. Gold drops automatically!</p><div class="flex justify-between w-full px-4"><span>Score: <span id="score">0</span></span><span>Time: <span id="timer">30.0s</span></span></div><canvas id="gameCanvas" width="800" height="500" style="background-color: #87CEEB;"></canvas><p id="feedback" class="text-lg h-6"></p></div>`;
+            const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d'), scoreDisplay = document.getElementById('score'), timerDisplay = document.getElementById('timer'), feedback = document.getElementById('feedback');
+            let score=0, gameActive=true, startTime=Date.now(), keys={}, helicopter = { x: canvas.width/2, y: 50, width: 80, height: 40, targetX: canvas.width/2 }, boat = { x: canvas.width/2, y: canvas.height - 100, width: 100, height: 40, waveOffset: 0, waveAmplitude: 5, waveSpeed: 0.05, vx: 1.5 }, goldPieces = [];
+            let lastGoldDrop = 0;
+            // OPTIMIZATION: Simplified sea drawing
+            const drawSea=()=>{ctx.fillStyle='#3498db';ctx.fillRect(0,canvas.height-120,canvas.width,120);ctx.fillStyle='rgba(255,255,255,0.2)';for(let i=0;i<15;i++){ctx.fillRect(0,canvas.height-120+Math.sin(i*0.5+performance.now()*boat.waveSpeed)*boat.waveAmplitude*0.5 + i*5,canvas.width,2);}}; const drawHelicopter=()=>{ctx.save();ctx.translate(helicopter.x,helicopter.y);ctx.fillStyle='#c0392b';ctx.beginPath();ctx.ellipse(0,0,helicopter.width/2,helicopter.height/2,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#c0392b';ctx.fillRect(-helicopter.width/2-20,-10,20,10);ctx.fillStyle='#7f8c8d';ctx.fillRect(-helicopter.width/2,-helicopter.height/2-10,helicopter.width,5);ctx.restore();}; const drawBoat=()=>{ctx.save();ctx.translate(boat.x,boat.y+boat.waveOffset);ctx.fillStyle='#9b59b6';ctx.beginPath();ctx.moveTo(-boat.width/2,0);ctx.lineTo(boat.width/2,0);ctx.quadraticCurveTo(boat.width/2+10,10,boat.width/2,boat.height);ctx.lineTo(-boat.width/2,boat.height);ctx.quadraticCurveTo(-boat.width/2-10,10,-boat.width/2,0);ctx.closePath();ctx.fill();ctx.fillStyle='#ecf0f1';ctx.fillRect(-20,-20,40,20);ctx.restore();}; const drawGold=(gold)=>{ctx.fillStyle='#f1c40f';ctx.beginPath();ctx.arc(gold.x,gold.y,8,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#e67e22';ctx.lineWidth=1;ctx.stroke();};
+            const endGame = (didWin) => { gameActive = false; document.removeEventListener('keydown', handleKeyDown); document.removeEventListener('keyup', handleKeyUp); feedback.textContent = didWin ? "Objective Complete!" : "Failed!"; currentTaskAction = didWin ? 'SUCCESS' : 'FAILURE_2'; completeBtn.textContent = didWin ? 'Task Complete!' : 'Continue'; if(completeBtn) completeBtn.style.display = 'block'; };
+            const handleKeyDown=(e)=>{keys[e.key]=true;}; const handleKeyUp=(e)=>{keys[e.key]=false;};
+            // OPTIMIZATION: Update timer with setInterval
+            gameTimerInterval = setInterval(() => {
+                if (!gameActive) { clearInterval(gameTimerInterval); return; }
+                const elapsed = Date.now()-startTime; if (elapsed >= 30000) { clearInterval(gameTimerInterval); }
+                timerDisplay.textContent=`${((30000 - elapsed)/1000).toFixed(1)}s`;
+            }, 100);
+            function gameLoop() {
+                if (!gameActive) return;
+                const elapsed = Date.now()-startTime; if (elapsed >= 30000 && score < 100) return endGame(false);
+                if(keys['ArrowLeft'])helicopter.targetX-=5; if(keys['ArrowRight'])helicopter.targetX+=5;
+                helicopter.x+=(helicopter.targetX-helicopter.x)*0.1;
+                helicopter.x = Math.max(helicopter.width/2, Math.min(canvas.width - helicopter.width/2, helicopter.x));
+                boat.x+=boat.vx; if(boat.x<boat.width/2||boat.x>canvas.width-boat.width/2)boat.vx*=-1;
+                boat.waveOffset=Math.sin(performance.now()*boat.waveSpeed)*boat.waveAmplitude;
+                if (Date.now() - lastGoldDrop > 1200) { goldPieces.push({ x: helicopter.x, y: helicopter.y + helicopter.height / 2, vy: 0 }); lastGoldDrop = Date.now(); }
+                for(let i=goldPieces.length-1;i>=0;i--){const g=goldPieces[i];g.y+=g.vy;g.vy+=0.2;if(g.y+8>boat.y+boat.waveOffset-boat.height/2&&g.x>boat.x-boat.width/2&&g.x<boat.x+boat.width/2){score+=10;scoreDisplay.textContent=score;goldPieces.splice(i,1);if(score>=100)endGame(true);}else if(g.y>canvas.height){goldPieces.splice(i,1);}}
+                ctx.clearRect(0,0,canvas.width,canvas.height); drawSea();drawHelicopter();drawBoat();goldPieces.forEach(drawGold);
+                gameAnimationFrameId=requestAnimationFrame(gameLoop);
+            }
+            document.addEventListener('keydown',handleKeyDown); document.addEventListener('keyup',handleKeyUp); gameLoop();
+        }
+        function showHardGame1() { /* Guess Number */
+            clearMinigame();
+            const completeBtn = document.getElementById('complete-task-btn');
+            if(completeBtn) completeBtn.style.display = 'none';
+            minigameContainer.innerHTML = `<div class="flex flex-col items-center justify-center space-y-4"><p>Guess a number between 1 and 25.</p><input type="number" id="guessInput" min="1" max="25" class="prediction-input p-2 bg-gray-800 text-yellow-300 rounded-lg"><button id="submitBtn" class="px-6 py-3 bg-blue-500 rounded-full mt-2">Submit</button><p id="feedback" class="h-6 mt-2"></p><p id="guessCount">Guesses left: 5</p></div>`;
+            let secretNumber = Math.floor(Math.random()*25)+1, guessCount=5;
+            const guessInput = document.getElementById('guessInput'), submitBtn = document.getElementById('submitBtn'), feedback = document.getElementById('feedback'), guessCountDisplay = document.getElementById('guessCount');
+            const checkGuess = () => {
+                if (guessCount === 0 || submitBtn.disabled) return; const userGuess = parseInt(guessInput.value, 10); if(isNaN(userGuess)) return;
+                guessCount--; guessCountDisplay.textContent = `Guesses left: ${guessCount}`;
+                if(userGuess===secretNumber){ feedback.textContent=`Correct!`; currentTaskAction='SUCCESS'; completeBtn.textContent='Task Complete!'; submitBtn.disabled = true;
+                } else if(guessCount===0){ feedback.textContent=`Failed! The number was ${secretNumber}.`; currentTaskAction='FAILURE_2'; completeBtn.textContent='Continue'; submitBtn.disabled = true;
+                } else{ feedback.textContent=`${userGuess < secretNumber ? 'Too low' : 'Too high'}!`; }
+                if(currentTaskAction && completeBtn) completeBtn.style.display='block';
+            };
+            submitBtn.onclick = checkGuess; guessInput.onkeydown = (e) => {if(e.key==='Enter')checkGuess();};
+        }
+        function showHardGame2() { /* Letter Shooter */
+             clearMinigame();
+             const completeBtn = document.getElementById('complete-task-btn');
+             if(completeBtn) completeBtn.style.display = 'none';
+            minigameContainer.innerHTML = `<div class="flex flex-col items-center justify-center space-y-2 text-sm"><p>Spell the target word!</p><div class="flex justify-between w-full px-4"><span>Target: <span id="word" class="text-yellow-300"></span></span><span>Time: <span id="time" class="text-yellow-300">45</span>s</span></div><canvas id="gameCanvas" width="500" height="300"></canvas><p id="feedback" class="text-lg h-6"></p></div>`;
+            const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d'), wordDisplay = document.getElementById('word'), timerDisplay = document.getElementById('time'), feedback = document.getElementById('feedback');
+            const WORDS=["APPLE","QUEST","MAGIC","CASTLE", "SUCCESS"], allLetters='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            let currentWord=WORDS[Math.floor(Math.random()*WORDS.length)], currentLetterIndex=0, letters=[], projectiles=[], mouse={x:0,y:0}, gameRunning=true, timer=45;
+            const endGame = (didWin) => { gameRunning=false; canvas.removeEventListener('mousemove',handleMouseMove); canvas.removeEventListener('click',handleClick); feedback.textContent = didWin ? "Success! Word spelled!" : "Failed!"; currentTaskAction = didWin ? 'SUCCESS' : 'FAILURE_2'; completeBtn.textContent = didWin ? 'Task Complete!' : 'Continue'; if(completeBtn) completeBtn.style.display = 'block'; };
+            for(let i=0;i<15;i++) letters.push({ x: Math.random()*470, y: Math.random()*270, letter: allLetters[Math.floor(Math.random()*26)], vx: (Math.random()-.5)*2, vy: (Math.random()-.5)*2 });
+            currentWord.split('').forEach(l => letters.push({ x: Math.random()*470, y: Math.random()*270, letter: l, vx: (Math.random()-.5)*2, vy: (Math.random()-.5)*2 }));
+            const handleMouseMove = (e)=>{const r=canvas.getBoundingClientRect();mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top;};
+            const handleClick = ()=>{projectiles.push({x:canvas.width/2,y:canvas.height-10,vx:Math.cos(Math.atan2(mouse.y-(canvas.height-10),mouse.x-canvas.width/2))*7,vy:Math.sin(Math.atan2(mouse.y-(canvas.height-10),mouse.x-canvas.width/2))*7});};
+            // OPTIMIZATION: Update timer with setInterval
+            gameTimerInterval=setInterval(()=>{if(!gameRunning){clearInterval(gameTimerInterval);return;}timer--;timerDisplay.textContent=timer;if(timer<=0)endGame(false);},1000);
+            function gameLoop() {
+                if(!gameRunning) return;
+                ctx.fillStyle='#1a252f'; ctx.fillRect(0,0,canvas.width,canvas.height);
+                // OPTIMIZATION: More efficient collision loop
+                for (let i = projectiles.length - 1; i >= 0; i--) {
+                    const p = projectiles[i];
+                    p.x += p.vx; p.y += p.vy;
+                    p.draw = () => { ctx.fillStyle='#e74c3c'; ctx.beginPath(); ctx.arc(p.x,p.y,4,0,Math.PI*2); ctx.fill(); };
+                    p.draw();
+                    let hit = false;
+                    for (let j = letters.length - 1; j >= 0; j--) {
+                        const l = letters[j];
+                        if (p.x > l.x && p.x < l.x + 25 && p.y > l.y && p.y < l.y + 25) {
+                            if (l.letter === currentWord[currentLetterIndex]) {
+                                letters.splice(j, 1);
+                                currentLetterIndex++;
+                            }
+                            hit = true;
+                            break; 
+                        }
+                    }
+                    if (hit || p.x < 0 || p.x > canvas.width || p.y < 0) {
+                        projectiles.splice(i, 1);
+                    }
+                    if (currentLetterIndex === currentWord.length) endGame(true);
+                }
+                letters.forEach(l => {
+                    l.x += l.vx; l.y += l.vy;
+                    if (l.x < 0 || l.x + 25 > canvas.width) l.vx *= -1;
+                    if (l.y < 0 || l.y + 25 > canvas.height) l.vy *= -1;
+                    l.draw = () => { ctx.fillStyle='#f39c12'; ctx.fillRect(l.x,l.y,25,25); ctx.fillStyle='#fff'; ctx.font='14px "Press Start 2P"'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(l.letter,l.x+12.5,l.y+12.5); };
+                    l.draw();
+                });
+                ctx.fillStyle='#7f8c8d'; ctx.fillRect(canvas.width/2-15,canvas.height-20,30,20);
+                gameAnimationFrameId=requestAnimationFrame(gameLoop);
+            }
+            wordDisplay.textContent=currentWord;
+            canvas.addEventListener('mousemove',handleMouseMove); canvas.addEventListener('click',handleClick); gameLoop();
+        }
+
+        // --- INITIALIZATION ---
+        function initialize() {
+            playGameBtn.addEventListener('click', () => {
+                loadLevel(0);
+            });
+            rollButton.addEventListener('click', rollDice);
+            pawnEl.classList.add('idle');
+        }
+
+        initialize();
+    </script>
+</body>
+</html>
